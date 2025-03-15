@@ -23,31 +23,55 @@ def get_website():
         return get_website()
     else:
         return websiteUrl
+    
+def get_browser():
+    print(f"Meine exe ist: {BROWSER_PATH}")
+    browser_path = input("Bitte den Pfad zum Browser (zur exe) angeben:\n")
+    browser_path = browser_path.replace("\\", "/")
+    
+    if os.path.isfile(browser_path) and browser_path.endswith(".exe"):
+        return browser_path
+    
+    # Check if the path is a directory
+    elif os.path.isdir(browser_path):
+        # Look for an .exe file in the directory
+        for file in os.listdir(browser_path):
+            if file.endswith(".exe"):  # Adjust for other browser names if needed
+                return os.path.join(browser_path, file).replace("\\", "/")
+    
+    # If no valid .exe is found
+    print("Der angegebene Pfad ist nicht korrekt oder enthält keine .exe-Datei.\nBitte geben Sie den korrekten Pfad an:")
+    return get_browser()
 
-"""ChatGPT Code"""
-def load_cookies(context):
-    """Loads cookies into the browser session."""
-    try:
-        with open(COOKIES_FILE, "r") as f:
-            cookies = eval(f.read())  # Load cookies
-            context.add_cookies(cookies)
-    except FileNotFoundError:
-        print("No cookies file found. Please log in manually first and export cookies.")
+def get_user_data_dir():
+    print(f"Meine daten liegen in: {USER_DATA_DIR}")
+    user_data_dir = input("Bitte den Pfad zum User Data Ordner angeben:\n")
+    user_data_dir = user_data_dir.replace("\\", "/")
+    if os.path.exists(user_data_dir):
+        return user_data_dir
+    else:
+        print("Der angegebene Pfad existiert nicht.\nBitte geben Sie den korrekten Pfad an:")
+        return get_user_data_dir()
+
 
 def get_existing_files():
     """Returns a set of already downloaded ZIP filenames."""
     return {f for f in os.listdir(DOWNLOAD_FOLDER) if f.endswith(".zip")}
 
-def scrape_and_download():
+def get_Website_files():
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)  # Change to True if you don't need to see the browser
+        browser = p.chromium.launch(headless=False, executable_path=BROWSER_PATH)
         context = browser.new_context()
-        load_cookies(context)
-        page = context.new_page()
-        
+        page = context.pages[0] if context.pages else context.new_page()
+
         print("Navigating to the site...")
         page.goto(BASE_URL, timeout=60000)  # Increase timeout for slow-loading sites
-        time.sleep(5)  # Give extra time for JS to load content
+        
+        # Wait for user input before continuing
+        input("Press Enter after logging in to continue...")
+
+        if page.url != BASE_URL:
+            page.goto(BASE_URL, timeout=60000)
         
         print("Extracting download links...")
         links = page.query_selector_all("a.post-attachment-link")  # Adjust selector if needed
@@ -60,6 +84,7 @@ def scrape_and_download():
                 zip_links.append(full_url)
         
         print(f"Found {len(zip_links)} zip files.")
+        """
         existing_files = get_existing_files()
         
         for link in zip_links:
@@ -76,14 +101,22 @@ def scrape_and_download():
             download.save_as(download_path)
             print(f"Saved {filename} to {download_path}")
         
-        print("All missing files downloaded.")
+        print("All missing files downloaded.")"
+        """
         browser.close()
 
 # CONFIGURATION
-#COOKIES_FILE = "cookies.json"  # Store your cookies here
+COOKIES_FILE = "cookies.json"  # Store your cookies here
+DOWNLOAD_FOLDER = ""
+BASE_URL = ""
+BROWSER_PATH = "C:/Program Files/Google/Chrome/Application/chrome.exe"
+USER_DATA_DIR = "C:/Users/YourUsername/AppData/Local/Google/Chrome/User Data"
+
 
 if __name__ == "__main__":
-    zip_folder = get_zip_folder()
-    websiteUrl = get_website()
-    #zip_folder = "C:/Users/jan-e/Downloads/Map Collection"
-    #scrape_and_download()
+    DOWNLOAD_FOLDER = get_zip_folder()
+    BASE_URL = get_website()
+    BROWSER_PATH = get_browser()
+    USER_DATA_DIR = get_user_data_dir() # ??? I dont know if this is needed
+    
+    get_Website_files()
