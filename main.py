@@ -1,8 +1,11 @@
 import os
 import time
 import requests
+from getpass import getpass
 
+#dependencies
 from tqdm import tqdm #for progress bar
+from dotenv import load_dotenv
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -16,24 +19,61 @@ from webdriver_manager.chrome import ChromeDriverManager
 # Configure Selenium
 chrome_options = Options()
 chrome_options.add_argument("--no-sandbox")
-#chrome_options.add_argument("--headless")  # Run in headless mode
 chrome_options.add_argument("--disable-dev-shm-usage")
 
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+
+"""
+TODO:
+- Add dynamic input for the get_data CSS_SELECTOR
+- Add dynamic input for file extension
+
+Ask chatgpt:
+- What are best practices for github the read me file?
+- What is the MIT Licence?
+- How to make a good README file?
+"""
+
+def get_user_input():
+    """
+    Fill the variabals DOWNLOAD_FOLDER and BASE_URL.
+    Either from a user_input.txt file or by asking the user.
+    """
+    #is there an existing user_input.txt file
+    print("Checking for user_input.txt file")
+    if os.path.exists("user_input.txt"):
+        print("Found input from a past seassion")
+        user_input = input("Do you want to use the past input? [y/n]:\n")
+        if user_input.lower() == "y" or user_input.lower() == "j":
+            with open("user_input.txt", "r") as f:
+                for line in f:
+                    if line.startswith("DOWNLOAD_FOLDER"):
+                        DOWNLOAD_FOLDER = line.split("=")[1].strip()
+                    elif line.startswith("BASE_URL"):
+                        BASE_URL = line.split("=")[1].strip()
+                    elif line.startswith("LOGIN_URL"):
+                        LOGIN_URL = line.split("=")[1].strip()
+            return DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL
+    
+    #get user input
+    DOWNLOAD_FOLDER = get_data_folder()
+    BASE_URL, LOGIN_URL = get_website()
+    
+    return DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL
 
 
 def get_data_folder():
     """
     Get the folder where the data files will be saved.
     """
-    data_folder = input("Bitte den data Ordner angeben:\n")
+    data_folder = input("What is the Download Folder?:\n")
     data_folder = data_folder.replace("\\", "/")
     if not os.path.exists(data_folder):
-        print("Der angegebene Ordner existiert nicht.\nSollte dieser angelegt werden? [j/n]")
-        choice = input().lower()
-        if choice == "j":
+        user_input = input("The given folder does not exist, should I create the folder? [y/n]:\n")
+        if user_input.lower() == "y" or user_input.lower() == "j":
             os.makedirs(data_folder, exist_ok=True)
+
     if os.path.exists(data_folder):
+        print(f"Downloading to: {data_folder}")
         return data_folder
     else:
         return get_data_folder()
@@ -42,29 +82,98 @@ def get_website():
     """
     Get the URL of the website to scrape (This was ment for a Patreon collection).
     """
-    websiteUrl = input("Bitte die URL der Collection eingeben:\n")
-    if not websiteUrl:
-        print("Keine eingabe gefunden.\nBitte geben Sie eine URL ein:")
-        return get_website()
+    websiteUrl = input("The URL of the Collection:\n")
+
+    if websiteUrl:
+        print(f"Scraping: {websiteUrl}")
     else:
-        return websiteUrl
+        print("No input found.")
+        return get_website()
+    
+    loginUrl = input("The URL of the Login page:\n")
+
+    if loginUrl:
+        print(f"Login on: {loginUrl}")
+    else:
+        print("No input found.")
+        return get_website()
+
+    return websiteUrl, loginUrl
     
 
-def get_data():
+def get_login_data():
+    load_dotenv()    
+    MAIL = os.getenv('MAIL')
+    PASSWORD = os.getenv('PASSWORD')
+    if not MAIL or not PASSWORD:
+        print("No login data found in .env file")
+        user_input = input("Do you want to create a new .env file? [y/n]:\n")
+        if user_input.lower() == "y" or user_input.lower() == "j":
+            MAIL = input("Mail: ")
+            PASSWORD = getpass()
+
+            with open(".env", "w") as f:
+                f.write(f"MAIL={MAIL}\n")
+                f.write(f"PASSWORD={PASSWORD}\n")
+            print("Created .env file")
+            # Runing the skript in headless mode
+        else:
+            print("When the Browser opens you will need to login manualy")
+            return
+    else:
+        print("Login data found in .env file")
+    # Runing the skript in headless mode
+    #chrome_options.add_argument("--headless")  
+
+def login(driver):
+    #start the webdriver
+    driver.get(LOGIN_URL)
+    wait = WebDriverWait(driver, 20)
+    input("Press Enter to continue after the login page has loaded\n")
+    return
+
+    #commented out since this did not work just now...
+    try:
+        #wait for the login form to load
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="email"]')))
+        email = driver.find_element(By.CSS_SELECTOR, 'input[name="email"]')
+        email.send_keys(MAIL)
+        time.sleep(1)
+
+        continue_button = driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
+        continue_button.click()
+        time.sleep(5)
+
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="current-password"]')))
+        password = driver.find_element(By.CSS_SELECTOR, 'input[name="current-password"]')
+        print("found password input")
+        password.send_keys(PASSWORD)
+        print("filled password")
+        time.sleep(1)
+
+        continue_button = driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
+        continue_button.click()
+        time.sleep(5)
+    except:
+        print("Error: Could not login")
+        driver.quit()
+        exit()
+    #wait for the login to complete
+    time.sleep(5)
+    print("Login complete")
+
+def get_links_to_download(driver):
     """
     Scrapes data file links from a webpage and downloads them.
     """
     driver.get(BASE_URL)
-    input("Please login and press Enter to continue...")
-    driver.get(BASE_URL)
-
     wait = WebDriverWait(driver, 120)
     try:
         wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'a[data-tag="post-attachment-link"]')))
     except:
         print("Timeout: No attachment links found")
         driver.quit()
-        return
+        exit()
 
     # Extract data file links
     data_links = []
@@ -73,31 +182,34 @@ def get_data():
     for element in data_elements:
         data_url = element.get_attribute("href")
         data_name = element.text.strip()
-        if data_url and data_name.endswith(".data"):
+        if data_url and data_name.endswith(".zip"):
             data_links.append({"url": data_url, "filename": data_name})
             print(f"Found: {data_name} -> {data_url}")
 
     print(f"Found {len(data_links)} data files in total")
     return data_links
 
-def download_missing_datas(data_links):
+def download_missing_datas(driver, data_links):
     """
     Comparing the data files in the DOWNLOAD_FOLDER with the data_links and download the missing ones.
     """
     # Download missing data files
     existing_datas = os.listdir(DOWNLOAD_FOLDER)
-    existing_datas = {f for f in existing_datas if f.endswith(".data")}
-    print(f"You allready have downloaded: {len(existing_datas)} datas in this folder.")
+    existing_datas = {f for f in existing_datas if f.endswith(".zip")}
+    print(f"You allready have downloaded: {len(existing_datas)} files in this folder.")
 
-    files_to_download = [data_info for data_info in data_links if data_info['filename'] not in existing_datas]
+    files_to_download = []
+    for data_info in data_links:
+        if data_info['filename'] not in existing_datas and data_info['filename'] not in files_to_download:
+            files_to_download.append(data_info)
 
     if not files_to_download:
         print("No new files to download.")
         return
 
     print(f"We plan on downloading {len(files_to_download)} files.")
-    userinput = input("Do you want to continue? [y/n]")
-    if userinput.lower() != "y":
+    user_input = input("Do you want to continue? [y/n]:\n")
+    if user_input.lower() != "y" and user_input.lower() != "j":
         print("Aborting download.")
         return
      
@@ -128,14 +240,35 @@ def download_missing_datas(data_links):
                 finally:
                     progress_bar.update(1)
     print("Download complete")
-    driver.quit()
+
+def remember_user_input():
+    """
+    Saves the user input DOWNLOAD_FOLDER and BASE_URL to a .txt file.
+    """
+    with open("user_input.txt", "w") as f:
+        f.write(f"DOWNLOAD_FOLDER={DOWNLOAD_FOLDER}\n")
+        f.write(f"BASE_URL={BASE_URL}\n")
+        f.write(f"LOGIN_URL={LOGIN_URL}\n")
+    print("Saved user input to user_input.txt")
 
 DOWNLOAD_FOLDER = ""
+LOGIN_URL = ""
 BASE_URL = ""
+MAIL = ""
+PASSWORD = ""
 
 if __name__ == "__main__":
-    DOWNLOAD_FOLDER = get_data_folder()
-    BASE_URL = get_website()
-    data_links = get_data()
-    download_missing_datas(data_links)
+    DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL = get_user_input()
+    
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+
+    #get_login_data()
+    #remember_user_input()
+
+    login(driver)
+    
+    data_links = get_links_to_download(driver)
+    if data_links:
+        download_missing_datas(driver, data_links)
     driver.quit()
+
