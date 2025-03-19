@@ -49,17 +49,20 @@ def get_user_input():
             return DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL
     
     #get user input
-    DOWNLOAD_FOLDER = get_data_folder()
+    DOWNLOAD_FOLDER = get_download_folder()
     BASE_URL, LOGIN_URL = get_website()
     
     return DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL
 
 
-def get_data_folder():
+def get_download_folder():
     """
     Get the folder where the data files will be saved.
     """
+    if DOWNLOAD_FOLDER != "":
+        print(f"Last folder: {DOWNLOAD_FOLDER}\n")
     data_folder = input("What is the Download Folder?:\n")
+
     data_folder = data_folder.replace("\\", "/")
     if not os.path.exists(data_folder):
         user_input = input("The given folder does not exist, should I create the folder? [y/n]:\n")
@@ -70,22 +73,25 @@ def get_data_folder():
         print(f"Downloading to: {data_folder}")
         return data_folder
     else:
-        return get_data_folder()
+        return get_download_folder()
 
 def get_website():
     """
     Get the URL of the website to scrape (This was ment for a Patreon collection).
     """
+    if BASE_URL != "":
+        print(f"Last URL: {BASE_URL}\n")
     websiteUrl = input("The URL of the Collection:\n")
-
     if websiteUrl:
         print(f"Scraping: {websiteUrl}")
     else:
         print("No input found.")
         return get_website()
-    
-    loginUrl = input("The URL of the Login page:\n")
 
+
+    if LOGIN_URL != "":
+        print(f"Last URL: {LOGIN_URL}\n")    
+    loginUrl = input("The URL of the Login page:\n")
     if loginUrl:
         print(f"Login on: {loginUrl}")
     else:
