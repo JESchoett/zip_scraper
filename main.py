@@ -99,10 +99,11 @@ def get_website():
         return get_website()
 
     return websiteUrl, loginUrl
-    
+
 
 def get_login_data():
-    load_dotenv()    
+    headless = True
+    load_dotenv()
     MAIL = os.getenv('MAIL')
     PASSWORD = os.getenv('PASSWORD')
     if not MAIL or not PASSWORD:
@@ -116,45 +117,50 @@ def get_login_data():
                 f.write(f"MAIL={MAIL}\n")
                 f.write(f"PASSWORD={PASSWORD}\n")
             print("Created .env file")
-            return MAIL, PASSWORD
         else:
             print("When the Browser opens you will need to login manualy")
-            return
+            MAIL = ""
+            PASSWORD = ""
+            headless = False
+
+        return MAIL, PASSWORD, headless
     else:
         print("Login data found in .env file")
-        # Runing the skript in headless mode
-        return MAIL, PASSWORD
+        return MAIL, PASSWORD, headless
 
-def login(driver):
+def login(driver, headless):
     #start the webdriver
     driver.get(LOGIN_URL)
     wait = WebDriverWait(driver, 20)
 
-    #commented out since this did not work just now...
-    try:
-        #wait for the login form to load
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="email"]')))
-        email = driver.find_element(By.CSS_SELECTOR, 'input[name="email"]')
-        email.click()
-        email.send_keys(MAIL)
-        
-        continue_button = driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
-        continue_button.click()
-        time.sleep(5)
+    if headless:
+        try:
+            #wait for the login form to load
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="email"]')))
+            email = driver.find_element(By.CSS_SELECTOR, 'input[name="email"]')
+            email.click()
+            email.send_keys(MAIL)
 
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="current-password"]')))
-        password = driver.find_element(By.CSS_SELECTOR, 'input[name="current-password"]')
-        password.click()
-        password.send_keys(PASSWORD)
-        time.sleep(5)
+            continue_button = driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
+            continue_button.click()
+            time.sleep(5)
 
-        continue_button = driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
-        continue_button.click()
-        time.sleep(5)
-    except:
-        print("Error: Could not login")
-        driver.quit()
-        exit()
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="current-password"]')))
+            password = driver.find_element(By.CSS_SELECTOR, 'input[name="current-password"]')
+            password.click()
+            password.send_keys(PASSWORD)
+            time.sleep(5)
+
+            continue_button = driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
+            continue_button.click()
+            time.sleep(5)
+        except:
+            print("Error: Could not login")
+            driver.quit()
+            exit()
+    else:
+        print("Please login manualy in the browser and come back to the terminal")
+        input("Press Enter to continue...")
     #wait for the login to complete
     time.sleep(5)
     print("Login complete")
@@ -250,7 +256,7 @@ def remember_user_input():
     print("Saved user input to user_input.txt")
 
 
-def configure_driver(headless=True):
+def configure_driver(headless):
     """
     Configure the Selenium webdriver.
     """
@@ -266,18 +272,23 @@ def configure_driver(headless=True):
     if headless:
         chrome_options.add_argument("--headless")
 
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+    # Ensure ChromeDriver matches the installed Chrome version
+    try:
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
-    # Bypass WebDriver detection
-    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-        "source": """
-        Object.defineProperty(navigator, 'webdriver', {
-          get: () => undefined
+        # Bypass WebDriver detection
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": """
+            Object.defineProperty(navigator, 'webdriver', {
+              get: () => undefined
+            })
+            """
         })
-        """
-    })
 
-    return driver
+        return driver
+    except Exception as e:
+        print(f"Error configuring the driver: {e}")
+        raise
 
 DOWNLOAD_FOLDER = ""
 LOGIN_URL = ""
@@ -287,16 +298,12 @@ PASSWORD = ""
 
 if __name__ == "__main__":
     DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL = get_user_input()
-    
 
-    MAIL, PASSWORD = get_login_data()
+    MAIL, PASSWORD, headless = get_login_data()
     remember_user_input()
 
-    if MAIL and PASSWORD:
-        driver = configure_driver(headless=True)
-    else:
-        driver = configure_driver(headless=False)
-    login(driver)
+    driver = configure_driver(headless)
+    login(driver, headless)
 
     data_links = get_links_to_download(driver)
     if data_links:
