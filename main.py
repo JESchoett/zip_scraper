@@ -16,12 +16,6 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from webdriver_manager.chrome import ChromeDriverManager
 
-# Configure Selenium
-chrome_options = Options()
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--disable-dev-shm-usage")
-
-
 """
 TODO:
 - Add dynamic input for the get_data CSS_SELECTOR
@@ -116,40 +110,37 @@ def get_login_data():
                 f.write(f"MAIL={MAIL}\n")
                 f.write(f"PASSWORD={PASSWORD}\n")
             print("Created .env file")
-            # Runing the skript in headless mode
+            return MAIL, PASSWORD
         else:
             print("When the Browser opens you will need to login manualy")
             return
     else:
         print("Login data found in .env file")
-    # Runing the skript in headless mode
-    #chrome_options.add_argument("--headless")  
+        # Runing the skript in headless mode
+        return MAIL, PASSWORD
 
 def login(driver):
     #start the webdriver
     driver.get(LOGIN_URL)
     wait = WebDriverWait(driver, 20)
-    input("Press Enter to continue after the login page has loaded\n")
-    return
 
     #commented out since this did not work just now...
     try:
         #wait for the login form to load
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="email"]')))
         email = driver.find_element(By.CSS_SELECTOR, 'input[name="email"]')
+        email.click()
         email.send_keys(MAIL)
-        time.sleep(1)
-
+        
         continue_button = driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
         continue_button.click()
         time.sleep(5)
 
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="current-password"]')))
         password = driver.find_element(By.CSS_SELECTOR, 'input[name="current-password"]')
-        print("found password input")
+        password.click()
         password.send_keys(PASSWORD)
-        print("filled password")
-        time.sleep(1)
+        time.sleep(5)
 
         continue_button = driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
         continue_button.click()
@@ -220,7 +211,7 @@ def download_missing_datas(driver, data_links):
     with tqdm(total=len(files_to_download), desc="Downloading files", unit="file") as progress_bar:
         for data_info in data_links:
             if data_info['filename'] not in existing_datas:
-                #print(f"Downloading: {data_info['filename']}")
+                print(f"\nDownloading: {data_info['filename']}")
                 try:
                     # Use cookies in the requests session
                     with requests.Session() as session:
@@ -234,11 +225,12 @@ def download_missing_datas(driver, data_links):
                             for chunk in response.iter_content(chunk_size=8192):
                                 file.write(chunk)
 
-                        #print(f"Downloaded: {data_info['filename']}")
                 except requests.exceptions.RequestException as e:
                     print(f"Error downloading {data_info['filename']}: {e}")
                 finally:
                     progress_bar.update(1)
+                    #reduce load on the system and server
+                    time.sleep(2)
     print("Download complete")
 
 def remember_user_input():
@@ -251,6 +243,36 @@ def remember_user_input():
         f.write(f"LOGIN_URL={LOGIN_URL}\n")
     print("Saved user input to user_input.txt")
 
+
+def configure_driver(headless=True):
+    """
+    Configure the Selenium webdriver.
+    """
+    chrome_options = Options()
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--start-maximized")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+
+    if headless:
+        chrome_options.add_argument("--headless")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+
+    # Bypass WebDriver detection
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": """
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => undefined
+        })
+        """
+    })
+
+    return driver
+
 DOWNLOAD_FOLDER = ""
 LOGIN_URL = ""
 BASE_URL = ""
@@ -260,13 +282,16 @@ PASSWORD = ""
 if __name__ == "__main__":
     DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL = get_user_input()
     
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
-    #get_login_data()
-    #remember_user_input()
+    MAIL, PASSWORD = get_login_data()
+    remember_user_input()
 
+    if MAIL and PASSWORD:
+        driver = configure_driver(headless=True)
+    else:
+        driver = configure_driver(headless=False)
     login(driver)
-    
+
     data_links = get_links_to_download(driver)
     if data_links:
         download_missing_datas(driver, data_links)
