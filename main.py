@@ -46,13 +46,14 @@ def get_user_input():
                         BASE_URL = line.split("=")[1].strip()
                     elif line.startswith("LOGIN_URL"):
                         LOGIN_URL = line.split("=")[1].strip()
-            return DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL
-    
+            return DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL, True
+
+
     #get user input
     DOWNLOAD_FOLDER = get_download_folder()
     BASE_URL, LOGIN_URL = get_website()
-    
-    return DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL
+
+    return DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL, False
 
 
 def get_download_folder():
@@ -215,11 +216,11 @@ def download_missing_datas(driver, data_links):
     if user_input.lower() != "y" and user_input.lower() != "j":
         print("Aborting download.")
         return
-     
+
     # Extract cookies from Selenium
     selenium_cookies = driver.get_cookies()
     cookies = {cookie['name']: cookie['value'] for cookie in selenium_cookies}
-   
+
     with tqdm(total=len(files_to_download), desc="Downloading files", unit="file") as progress_bar:
         for data_info in data_links:
             if data_info['filename'] not in existing_datas:
@@ -297,10 +298,11 @@ MAIL = ""
 PASSWORD = ""
 
 if __name__ == "__main__":
-    DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL = get_user_input()
-
+    DOWNLOAD_FOLDER, BASE_URL, LOGIN_URL, remember = get_user_input()
     MAIL, PASSWORD, headless = get_login_data()
-    remember_user_input()
+
+    if remember:
+        remember_user_input()
 
     driver = configure_driver(headless)
     login(driver, headless)
